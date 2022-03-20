@@ -8,25 +8,25 @@ import sys
 import tqdm
 import shutil
 
-pre_path = r'H:\DataSet\场景分类\UCMerced_LandUse\UCMerced_LandUse\Images'
+pre_path = r'H:\DataSet\SceneCls\UCMerced_LandUse\UCMerced_LandUse\Images'
 file_list = glob.glob(pre_path+'/*/*')
 dataset_name = 'UCMerced'
-cache_keys = ['filename', 'img', 'gt_label']
+cache_keys = ['filename', 'gt_label']
 
 
-lmdb_file = pre_path + f'/{dataset_name}_lmdb'
+lmdb_path = os.path.abspath(pre_path + f'/../{dataset_name}_lmdb')
 # if os.path.exists(pre_path + f'/lmdb'):
 #     shutil.rmtree(pre_path + f'/lmdb')
-os.makedirs(lmdb_file)
+os.makedirs(lmdb_path, exist_ok=True)
 
 data_size_per_item = sys.getsizeof(open(file_list[0], 'rb').read())
 print(f'data size:{data_size_per_item}')
 
 
-env = lmdb.open(lmdb_file, map_size=data_size_per_item * 10)
+env = lmdb.open(lmdb_path+f'\\{os.path.basename(lmdb_path)}.lmdb', map_size=data_size_per_item * 1e5)
 txn = env.begin(write=True)
 
-commit_interval = 1000
+commit_interval = 5
 keys_list = []
 for idx, file in enumerate(file_list):
     key = f'{dataset_name}_{os.path.basename(file).split(".")[0]}'
@@ -55,6 +55,6 @@ for idx, file in enumerate(file_list):
 txn.commit()
 env.close()
 keys_list = np.array(keys_list)
-np.savetxt(open(pre_path+'/keys_list.txt', 'w'), keys_list)
+np.savetxt(open(pre_path+'/../keys_list.txt', 'w'), keys_list, fmt='%s')
 print(f'Finish writing!')
 
