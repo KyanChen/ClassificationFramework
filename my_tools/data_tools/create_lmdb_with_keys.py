@@ -1,3 +1,4 @@
+import glob
 import os
 
 import lmdb
@@ -7,46 +8,53 @@ import sys
 import tqdm
 import shutil
 
-pre_path = '../../data/new_data'
-phase_list = ['train', 'val']
+pre_path = r'H:\DataSet\场景分类\UCMerced_LandUse\UCMerced_LandUse\Images'
+file_list = glob.glob(pre_path+'/*/*')
+dataset_name = 'UCMerced'
+cache_keys = ['filename', 'img', 'gt_label']
 
-labels = pickle.load(open(pre_path + '/all_gt_label.pkl', 'rb'))
-urls = pickle.load(open(pre_path + '/all_urls.pkl', 'rb'))
-embs = np.load(pre_path + '/all_emb.npy')
-assert len(labels) == len(urls) == len(embs)
-if os.path.exists(pre_path + f'/lmdb'):
-    shutil.rmtree(pre_path + f'/lmdb')
-os.makedirs(pre_path + f'/lmdb', exist_ok=True)
+
+lmdb_file = pre_path + f'/{dataset_name}_lmdb'
+# if os.path.exists(pre_path + f'/lmdb'):
+#     shutil.rmtree(pre_path + f'/lmdb')
+os.makedirs(lmdb_file)
+
+data_size_per_item = sys.getsizeof(open(file_list[0], 'rb').read())
+print(f'data size:{data_size_per_item}')
+
+
+env = lmdb.open(lmdb_file, map_size=data_size_per_item * 10)
+txn = env.begin(write=True)
+
 commit_interval = 1000
-for phase in phase_list:
-    keys = pickle.load(open(pre_path + f'/{phase}_list.pkl', 'rb'))
-    num_keys = len(keys)
-    items = ['urls', 'embs', 'labels']
-    # items = ['embs']
-    for item in items:
-        print(eval(item)[50])
-        data_size_per_item = sys.getsizeof(eval(item)[0])
-        print(f'data size: {item}--{data_size_per_item}')
-        data_size = data_size_per_item * num_keys
+keys_list = []
+for idx, file in enumerate(file_list):
+    key = f'{dataset_name}_{os.path.basename(file).split(".")[0]}'
+    keys_list.append(key)
 
-        env = lmdb.open(pre_path + f'/lmdb/{phase}_{item}.lmdb', map_size=data_size * 100)
-        txn = env.begin(write=True)
+    for cache_key in cache_keys:
+        if cache_key == 'filename':
+            value = os.path.basename(os.path.dirname(file)) + '/' + os.path.basename(file)
+        elif cache_key == 'img':
+            with open(file, 'rb') as f:
+                # 读取图像文件的二进制格式数据
+                value = f.read()
+        elif  cache_key == 'gt_label':
+            value = os.path.basename(os.path.dirname(file))
+        cache_key = key + f'_{cache_key}'
+        cache_key = cache_key.encode()
 
-        for idx, key in enumerate(tqdm.tqdm(keys)):
-            key_byte = str(key).encode()
-            if item == 'urls':
-                data = urls[key].replace('[', '').replace(']', '').encode()
-            elif item == 'embs':
-                data = eval(item)[key]
-            elif item == 'labels':
-                data = eval(item)[key].encode()
-            else:
-                raise NotImplementedError
-            txn.put(key_byte, data)
-            if idx % commit_interval == 1:
-                txn.commit()
-                txn = env.begin(write=True)
+        if isinstance(value, bytes):
+            txn.put(cache_key, value)
+        else:
+            # 标签类型为str, 转为bytes
+            txn.put(cache_key, value.encode())  # 编码
+    if idx % commit_interval == 1:
         txn.commit()
-        env.close()
-        print(f'Finish writing {phase}_{item}')
+        txn = env.begin(write=True)
+txn.commit()
+env.close()
+keys_list = np.array(keys_list)
+np.savetxt(open(pre_path+'/keys_list.txt', 'w'), keys_list)
+print(f'Finish writing!')
 
