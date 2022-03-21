@@ -113,6 +113,6 @@ class ClsFolderDataset(BaseDataset):
         for filename, gt_label in self.samples:
             info = {'img_prefix': self.data_prefix}
             info['img_info'] = {'filename': filename}
-            info['gt_label'] = np.array(gt_label, dtype=np.int64)
+            info['gt_label'] = np.array(self.class_to_idx[gt_label], dtype=np.int64)
             data_infos.append(info)
         return data_infos

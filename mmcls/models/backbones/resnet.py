@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 
+import warnings
 import torch.nn as nn
 import torch.utils.checkpoint as cp
 from mmcv.cnn import (ConvModule, build_conv_layer, build_norm_layer,
@@ -476,6 +477,7 @@ class ResNet(BaseBackbone):
                  norm_eval=False,
                  with_cp=False,
                  zero_init_residual=True,
+                 pretrained=None,
                  init_cfg=[
                      dict(type='Kaiming', layer=['Conv2d']),
                      dict(
@@ -485,6 +487,11 @@ class ResNet(BaseBackbone):
                  ],
                  drop_path_rate=0.0):
         super(ResNet, self).__init__(init_cfg)
+        if isinstance(pretrained, str):
+            warnings.warn('DeprecationWarning: pretrained is deprecated, '
+                          'please use "init_cfg" instead')
+            self.init_cfg = dict(type='Pretrained', checkpoint=pretrained)
+        
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
         self.depth = depth
