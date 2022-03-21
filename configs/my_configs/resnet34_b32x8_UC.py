@@ -1,4 +1,7 @@
 # checkpoint saving
+from sys import prefix
+
+
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -26,7 +29,7 @@ model = dict(
         init_cfg=dict(
             type='Pretrained',
             checkpoint='https://download.openmmlab.com/mmclassification/v0/resnet/resnet34_8xb32_in1k_20210831-f257d4e6.pth'),
-            prefix='backbone'
+            prefix='backbone',
         ),
     neck=dict(type='GlobalAveragePooling'),
     head=dict(
@@ -44,7 +47,7 @@ img_norm_cfg = dict(
 train_pipeline = [
     dict(type='LoadImageFromFile', rearrange=True),
     # dict(type='RandomResizedCrop', size=256),
-    dict(type='Resize', size=(256, -1)),
+    dict(type='Resize', size=(256, 256)),
     dict(type='RandomFlip', flip_prob=0.5, direction='horizontal'),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='ImageToTensor', keys=['img']),
@@ -53,14 +56,14 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
-    dict(type='Resize', size=(256, -1)),
+    dict(type='Resize', size=(256, 256)),
     # dict(type='CenterCrop', crop_size=224),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='ImageToTensor', keys=['img']),
     dict(type='Collect', keys=['img'])
 ]
 
-data_prefix = '/Users/kyanchen/Code/ClassificationFramework/data/UCMerced_LandUse/Images'
+data_prefix = 'H:/DataSet\SceneCls/UCMerced_LandUse/UCMerced_LandUse/Images'
 data = dict(
     samples_per_gpu=32,
     workers_per_gpu=2,

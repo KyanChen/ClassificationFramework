@@ -6,22 +6,24 @@ import os.path as osp
 import time
 import warnings
 
-import mmcv
 import torch
-from mmcv import Config, DictAction
-from mmcv.runner import get_dist_info, init_dist
 
+import mmcv
+import sys
+sys.path.append(sys.path[0]+'/../')
 from mmcls import __version__
 from mmcls.apis import init_random_seed, set_random_seed, train_model
 from mmcls.datasets import build_dataset
 from mmcls.models import build_classifier
 from mmcls.utils import collect_env, get_root_logger, setup_multi_processes
+from mmcv import Config, DictAction
+from mmcv.runner import get_dist_info, init_dist
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a model')
-    parser.add_argument('config', help='train config file path')
-    parser.add_argument('--work-dir', help='the dir to save logs and models')
+    parser.add_argument('--config', default='configs/my_configs/resnet34_b32x8_UC.py', help='train config file path')
+    parser.add_argument('--work-dir', default='results/EXP20220321_0', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
     parser.add_argument(
@@ -126,7 +128,7 @@ def main():
     # create work_dir
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
     # dump config
-    cfg.dump(osp.join(cfg.work_dir, osp.basename(args.config)))
+    cfg.dump(cfg.work_dir +'/'+osp.basename(args.config))
     # init the logger before other steps
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
     log_file = osp.join(cfg.work_dir, f'{timestamp}.log')

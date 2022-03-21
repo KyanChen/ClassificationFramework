@@ -7,7 +7,7 @@ import sys
 import tqdm
 import shutil
 
-pre_path = '/Users/kyanchen/Code/ClassificationFramework/data/UCMerced_LandUse/Images'
+pre_path = r'H:\DataSet\SceneCls\UCMerced_LandUse\UCMerced_LandUse\Images'
 sub_folder_list = glob.glob(pre_path +'/*')
 
 with open(pre_path+f'/../class_names.txt', 'w') as f:
