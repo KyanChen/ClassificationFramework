@@ -19,8 +19,7 @@ import torch.nn as nn
 from mmcv.runner import EpochBasedRunner
 from torch.utils.data import DataLoader
 
-from mmdet.core.evaluation import DistEvalHook, EvalHook
-from mmdet.datasets import DATASETS, CocoDataset, CustomDataset, build_dataset
+from mmcls.datasets import DATASETS, build_dataset
 from torch.utils.data.dataloader import default_collate
 
 from mmcv.parallel import DataContainer
@@ -454,14 +453,14 @@ def collate(batch, samples_per_gpu=1):
 
 def test_model():
     # config_path = '/Users/kyanchen/Code/DetFramework/configs/my_configs/cluster2one_transformer_config.py'
-    config_path = 'configs/my_configs/fcos_NMSNet_config.py'
+    config_path = 'configs/my_configs/resnet34_b32x8_UC.py'
     config = mmcv.Config.fromfile(config_path)
     dataset = test_dataset_init(config)
 
-    from mmdet.models import build_detector
+    from mmcls.models import build_classifier
 
     model_config = copy.deepcopy(config.get('model'))
-    detector = build_detector(model_config)
+    detector = build_classifier(model_config)
 
     dataloader = DataLoader(
         dataset, batch_size=2, num_workers=0, 
