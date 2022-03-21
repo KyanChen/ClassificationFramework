@@ -29,11 +29,13 @@ class LoadImageFromFile(object):
     def __init__(self,
                  to_float32=False,
                  color_type='color',
-                 file_client_args=dict(backend='disk')):
+                 file_client_args=dict(backend='disk'),
+                 rearrange=False):
         self.to_float32 = to_float32
         self.color_type = color_type
         self.file_client_args = file_client_args.copy()
         self.file_client = None
+        self.rearrange =rearrange
 
     def __call__(self, results):
         if self.file_client is None:
@@ -49,7 +51,8 @@ class LoadImageFromFile(object):
         img = mmcv.imfrombytes(img_bytes, flag=self.color_type)
         if self.to_float32:
             img = img.astype(np.float32)
-
+        if self.rearrange:
+            img = img.astype(np.float32) / 255.
         results['filename'] = filename
         results['ori_filename'] = results['img_info']['filename']
         results['img'] = img
