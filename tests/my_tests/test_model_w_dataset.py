@@ -26,7 +26,7 @@ from mmcv.parallel import DataContainer
 from collections.abc import Mapping, Sequence
 from functools import partial
 import torch.nn.functional as F
-
+from mmcv.runner.hooks import DistEvalHook, EvalHook
 
 def _create_dummy_coco_json(json_name):
     image = {
