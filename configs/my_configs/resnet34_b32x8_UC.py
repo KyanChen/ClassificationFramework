@@ -1,8 +1,4 @@
-# checkpoint saving
-from sys import prefix
-
-
-checkpoint_config = dict(interval=1)
+checkpoint_config = dict(interval=5)
 # yapf:disable
 log_config = dict(
     interval=50,
@@ -62,7 +58,7 @@ test_pipeline = [
     dict(type='Collect', keys=['img'])
 ]
 
-data_prefix = 'data/UC/UCMerced_LandUse/Images'
+data_prefix = '../data/UC/UCMerced_LandUse/Images'
 data = dict(
     samples_per_gpu=32,
     workers_per_gpu=2,
