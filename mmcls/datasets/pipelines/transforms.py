@@ -442,11 +442,13 @@ class RandomFlip(object):
             'horizontal' and 'vertical'. Default: 'horizontal'.
     """
 
-    def __init__(self, flip_prob=0.5, direction='horizontal'):
+    def __init__(self, flip_prob=0.5, directions=['horizontal', 'vertical']):
         assert 0 <= flip_prob <= 1
-        assert direction in ['horizontal', 'vertical']
+
+        for x in directions:
+            assert x in ['horizontal', 'vertical']
         self.flip_prob = flip_prob
-        self.direction = direction
+        self.directions = directions
 
     def __call__(self, results):
         """Call function to flip image.
@@ -460,11 +462,12 @@ class RandomFlip(object):
         """
         flip = True if np.random.rand() < self.flip_prob else False
         results['flip'] = flip
-        results['flip_direction'] = self.direction
+        results['flip_direction'] = self.directions
         if results['flip']:
-            # flip image
+            direction_id = 0 if np.random.rand() < 0.5 else 1
+            results['flip_direction'] = self.directions[direction_id]
             for key in results.get('img_fields', ['img']):
-                results[key] = mmcv.imflip(
+                results[key] = mmcv.imflip_(
                     results[key], direction=results['flip_direction'])
         return results
 

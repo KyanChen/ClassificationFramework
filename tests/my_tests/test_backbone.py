@@ -8,7 +8,7 @@ sys.path.append(f'{sys.path[0]}/../..')
 print(sys.path)
 
 
-def _get_model_cfg(config_fpath):
+def _get_detector_cfg(config_fpath):
     from mmcv import Config
     config = Config.fromfile(config_fpath)
     model = copy.deepcopy(config.model)
@@ -63,40 +63,19 @@ def _demo_mm_inputs(input_shape=(2, 100, 5)):
     return mm_inputs
 
 
-def test_nms_net_forward():
-    model = _get_model_cfg('/Users/kyanchen/Code/DetFramework/configs/my_configs/fcos_NMSNet_config.py')
+def test_backbone():
+    model = dict(
+        type='Siren', 
+        num_layers=3,
+        bias=False
+    )
+    from mmcls.models import build_backbone
+    backbone = build_backbone(model)
+    inputs = (torch.randn(5, 2), torch.randn(5, 256))
+    backbone(*inputs)
+    pass
 
-    from mmcls.models import build_representor
-    representor = build_representor(model)
-
-    input_shape = (2, 3, 512, 512)
-    mm_inputs = _demo_mm_inputs(input_shape)
-
-    imgs = mm_inputs.pop('imgs')
-    img_metas = mm_inputs.pop('img_metas')
-
-    representor.train()
-    gt_bboxes = mm_inputs['gt_bboxes']
-    gt_labels = mm_inputs['gt_labels']
-
-    losses = representor.forward(
-        imgs,
-        img_metas,
-        gt_bboxes=gt_bboxes,
-        gt_labels=gt_labels,
-        return_loss=True)
-
-    # Test forward test
-    representor.eval()
-    with torch.no_grad():
-        img_list = [g[None, :] for g in imgs]
-        batch_results = []
-        for one_img, one_meta in zip(img_list, img_metas):
-            result = representor.forward([one_img], [[one_meta]],
-                                      rescale=True,
-                                      return_loss=False)
-            batch_results.append(result)
-
+    
 
 if __name__ == '__main__':
-    test_nms_net_forward()
+    test_backbone()

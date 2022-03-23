@@ -10,6 +10,8 @@ NECKS = MODELS
 HEADS = MODELS
 LOSSES = MODELS
 CLASSIFIERS = MODELS
+REPRESENTORS = MODELS
+PARAMETERS = MODELS
 
 ATTENTION = Registry('attention', parent=MMCV_ATTENTION)
 
@@ -36,3 +38,12 @@ def build_loss(cfg):
 
 def build_classifier(cfg):
     return CLASSIFIERS.build(cfg)
+
+def build_representor(cfg):
+    return REPRESENTORS.build(cfg)
+
+def build_representor(cfg):
+    return REPRESENTORS.build(cfg)
+
+def build_learnable_params(cfg):
+    return PARAMETERS.build(cfg)

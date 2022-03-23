@@ -453,14 +453,14 @@ def collate(batch, samples_per_gpu=1):
 
 def test_model():
     # config_path = '/Users/kyanchen/Code/DetFramework/configs/my_configs/cluster2one_transformer_config.py'
-    config_path = 'configs/my_configs/resnet34_b32x8_UC.py'
+    config_path = 'configs/my_configs/MLP_UC.py'
     config = mmcv.Config.fromfile(config_path)
     dataset = test_dataset_init(config)
 
-    from mmcls.models import build_classifier
+    from mmcls.models import build_representor
 
     model_config = copy.deepcopy(config.get('model'))
-    detector = build_classifier(model_config)
+    detector = build_representor(model_config)
 
     dataloader = DataLoader(
         dataset, batch_size=2, num_workers=0, 
