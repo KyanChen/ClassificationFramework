@@ -1,3 +1,3 @@
-from 
+from .modulations import Modulations
 
-__all__ = ['ImageRepresentor']
+__all__ = ['Modulations']

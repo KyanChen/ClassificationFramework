@@ -1,4 +1,4 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from .dynamic_iterbased_runner import DynamicIterBasedRunner
+from .dynamic_epochbased_runner import DynamicEpochBasedRunner
 
-__all__ = ['DynamicIterBasedRunner']
+__all__ = ['DynamicEpochBasedRunner']

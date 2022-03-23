@@ -10,7 +10,7 @@ import mmcv
 import torch
 import torch.distributed as dist
 from mmcv.parallel import collate, is_module_wrapper
-from mmcv.runner import HOOKS, RUNNERS, IterBasedRunner, get_host_info
+from mmcv.runner import HOOKS, RUNNERS, EpochBasedRunner, get_host_info
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
@@ -115,7 +115,7 @@ class IterLoader:
 
 
 @RUNNERS.register_module()
-class DynamicIterBasedRunner(IterBasedRunner):
+class DynamicEpochBasedRunner(IterEpochRunner):
     """Dynamic Iterbased Runner.
 
     In this Dynamic Iterbased Runner, we will pass the ``reducer`` to the

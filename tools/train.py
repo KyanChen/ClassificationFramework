@@ -22,7 +22,7 @@ from mmcv.runner import get_dist_info, init_dist
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a model')
-    parser.add_argument('--config', default='configs/my_configs/resnet34_b32x8_UC.py', help='train config file path')
+    parser.add_argument('--config', default='configs/my_configs/MLP_UC.py', help='train config file path')
     parser.add_argument('--work-dir', default='results/EXP20220321_0', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
@@ -32,7 +32,7 @@ def parse_args():
         help='whether not to evaluate the checkpoint during training')
     group_gpus = parser.add_mutually_exclusive_group()
     group_gpus.add_argument(
-        '--device', help='device used for training. (Deprecated)')
+        '--device', default='cpu', help='device used for training. (Deprecated)')
     group_gpus.add_argument(
         '--gpus',
         type=int,

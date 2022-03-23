@@ -1,19 +1,19 @@
 checkpoint_config = dict(interval=5)
-# yapf:disable
+
 log_config = dict(
     interval=50,
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
     ])
-# yapf:enable
+
 
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 workflow = [('train', 1)]
 
-num_classes=21
-# model settings
+n_batch=2
+
 model = dict(
     type='ImageRepresentor',
     backbone=dict(
@@ -27,8 +27,10 @@ model = dict(
         expansions=[1],
         init_cfg=None
         ),
-    neck=None,
-    head=None,
+    modulations=dict(
+        n_dims=256,
+        n_batch=n_batch
+    )
 )
 
 # dataset settings
@@ -52,7 +54,7 @@ test_pipeline = [
 data_prefix = 'data/UC/UCMerced_LandUse/Images'
 
 data = dict(
-    samples_per_gpu=32,
+    samples_per_gpu=n_batch,
     workers_per_gpu=2,
     train=dict(
         type=dataset_type,
@@ -99,7 +101,7 @@ lr_config = dict(
 # # learning policy
 # lr_config = dict(policy='step', step=[30, 60, 90])
 
-runner = dict(type='DynamicIterBasedRunner', max_epochs=200)
+runner = dict(type='DynamicEpochBasedRunner', max_epochs=200)
 evaluation = dict(interval=1, metric='accuracy')
 load_from = None
 resume_from = None
