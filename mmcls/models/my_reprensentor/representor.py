@@ -70,7 +70,7 @@ class ImageRepresentor(BaseClassifier):
 
     def forward_train(self, img, **kwargs):
         B, C, H, W = img.size()
-
+        self.grid = self.grid.to(img.device)
         gt_labels = img
         gt_label_samples = rearrange(gt_labels, 'b c h w -> (b h w) c')  # n_batch, n_sample, 3
         imgs = repeat(self.grid, 'c h w -> B c h w', B=B)
