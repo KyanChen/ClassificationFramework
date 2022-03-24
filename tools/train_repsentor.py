@@ -33,7 +33,7 @@ def parse_args():
         help='whether not to evaluate the checkpoint during training')
     group_gpus = parser.add_mutually_exclusive_group()
     group_gpus.add_argument(
-        '--device', default='cpu', help='device used for training. (Deprecated)')
+        '--device', default='cuda', help='device used for training. (Deprecated)')
     group_gpus.add_argument(
         '--gpus',
         type=int,

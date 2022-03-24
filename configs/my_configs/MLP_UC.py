@@ -1,7 +1,7 @@
-checkpoint_config = dict(interval=5)
+checkpoint_config = dict(interval=100)
 
 log_config = dict(
-    interval=10,
+    interval=1,
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
@@ -12,15 +12,15 @@ dist_params = dict(backend='nccl')
 log_level = 'INFO'
 workflow = [('train', 1)]
 
-n_batch = 32
-inner_loop_num = 10
+n_batch = 4
+inner_loop_num = 100
 
 model = dict(
     type='ImageRepresentor',
     img_size=(256, 256),
     max_sample_per_img=0.5,
     max_inner_iter=inner_loop_num,
-    loss=dict(type='SmoothL1Loss', loss_weight=1.0),
+    loss=dict(type='MSELoss', loss_weight=1.0),
     backbone=dict(
         type='Siren',
         inner_layers=8,
@@ -81,7 +81,7 @@ data = dict(
         pipeline=test_pipeline))
 
 
-optimizer_config = dict(type='MyOptimizerHook', grad_clip=dict(max_norm=35, norm_type=2))
+optimizer_config = dict(type='MyOptimizerHook', grad_clip=dict(max_norm=1000, norm_type=2))
 
 # DETR: backbone:1e-5; lr:1e-4; weight_decay:1e-4; betas=(0.9, 0.95)
 # Adam L2正则化的最佳学习率是1e-6（最大学习率为1e-3），而0.3是weight decay的最佳值（学习率为3e-3）
@@ -89,7 +89,7 @@ optimizer_config = dict(type='MyOptimizerHook', grad_clip=dict(max_norm=35, norm
 # optimizer_outer = dict(type='AdamW', lr=1e-3, weight_decay=1e-3)
 optimizer = dict(
     modulations=dict(type='AdamW', lr=1e-2, betas=(0.5, 0.999)),
-    siren=dict(type='AdamW', lr=1e-4, betas=(0.5, 0.999))
+    siren=dict(type='AdamW', lr=1e-3, betas=(0.5, 0.999))
 )
 
 # optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
@@ -102,7 +102,7 @@ lr_config = dict(
     )
 
 
-runner = dict(type='DynamicEpochBasedRunner', max_epochs=200)
+runner = dict(type='DynamicEpochBasedRunner', max_epochs=500)
 evaluation = dict(interval=1, metric='accuracy')
 load_from = None
 resume_from = None
