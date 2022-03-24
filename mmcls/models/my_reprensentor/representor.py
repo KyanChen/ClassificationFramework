@@ -43,17 +43,20 @@ class ImageRepresentor(BaseClassifier):
         self.compute_loss = build_loss(loss)
         self.compute_accuracy = PSNR()
         self.cal_acc = cal_acc
-        self.init_weights()
 
     def get_grid(self, h, w, is_normalize=True):
         j = torch.linspace(0.0, h - 1.0, h)
         i = torch.linspace(0.0, w - 1.0, w)
         if is_normalize:
-            j /= h
-            i /= w
+            j = j / (h-1) - 0.5
+            i = i / (w-1) - 0.5
         j_grid, i_grid = torch.meshgrid(j, i)
-        grid = torch.stack([i_grid, j_grid])
-        return grid
+        grid = 2 * torch.stack([i_grid, j_grid])
+
+        # tensors = [torch.linspace(-1, 1, steps = image_height), torch.linspace(-1, 1, steps = image_width)]
+        # mgrid = torch.stack(torch.meshgrid(*tensors, indexing = 'ij'), dim=-1)
+        # mgrid = rearrange(mgrid, 'h w c -> (h w) c')
+        return grid  # C H W
 
     def extract_feat(self, imgs, stage=None):
         pass
