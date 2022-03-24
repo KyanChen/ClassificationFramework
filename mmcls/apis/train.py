@@ -8,11 +8,13 @@ import torch.distributed as dist
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import (DistSamplerSeedHook, Fp16OptimizerHook,
                          build_optimizer, build_runner, get_dist_info)
+
 from mmcv.runner.hooks import DistEvalHook, EvalHook
 
-from mmcls.core import DistOptimizerHook
+from mmcls.core import DistOptimizerHook, build_optimizers
 from mmcls.datasets import build_dataloader, build_dataset
 from mmcls.utils import get_root_logger
+from mmcls.my_runner import *
 
 
 def init_random_seed(seed=None, device='cuda'):
@@ -121,7 +123,7 @@ def train_model(model,
                     'is not lower than v1.4.4'
 
     # build runner
-    optimizer = build_optimizer(model, cfg.optimizer)
+    optimizer = build_optimizers(model, cfg.optimizer)
 
     if cfg.get('runner') is None:
         cfg.runner = {
@@ -163,7 +165,7 @@ def train_model(model,
         cfg.log_config,
         cfg.get('momentum_config', None),
         custom_hooks_config=cfg.get('custom_hooks', None))
-    if distributed and cfg.runner['type'] == 'EpochBasedRunner':
+    if distributed and cfg.runner['type'] in ['EpochBasedRunner', 'DynamicEpochBasedRunner']:
         runner.register_hook(DistSamplerSeedHook())
 
     # register eval hooks

@@ -8,6 +8,8 @@ from .label_smooth_loss import LabelSmoothLoss
 from .seesaw_loss import SeesawLoss
 from .utils import (convert_to_one_hot, reduce_loss, weight_reduce_loss,
                     weighted_loss)
+from .smooth_l1_loss import SmoothL1Loss
+from .mse_loss import MSELoss
 
 __all__ = [
     'accuracy', 'Accuracy', 'asymmetric_loss', 'AsymmetricLoss',

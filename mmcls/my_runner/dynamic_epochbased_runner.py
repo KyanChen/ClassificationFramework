@@ -115,7 +115,7 @@ class IterLoader:
 
 
 @RUNNERS.register_module()
-class DynamicEpochBasedRunner(IterEpochRunner):
+class DynamicEpochBasedRunner(EpochBasedRunner):
     """Dynamic Iterbased Runner.
 
     In this Dynamic Iterbased Runner, we will pass the ``reducer`` to the
@@ -180,64 +180,41 @@ class DynamicEpochBasedRunner(IterEpochRunner):
             if hasattr(hook, fn_name):
                 getattr(hook, fn_name)(self)
 
+
     def train(self, data_loader, **kwargs):
-        if is_module_wrapper(self.model):
-            _model = self.model.module
-        else:
-            _model = self.model
         self.model.train()
         self.mode = 'train'
-        # check if self.optimizer from model and track it
-        if self.optimizer_from_model:
-            self.optimizer = _model.optimizer
-
         self.data_loader = data_loader
-        self._epoch = data_loader.epoch
-        self.call_hook('before_fetch_train_data')
-        data_batch = next(self.data_loader)
-        self.call_hook('before_train_iter')
+        self._max_iters = self._max_epochs * len(self.data_loader)
+        self.call_hook('before_train_epoch')
+        time.sleep(2)  # Prevent possible deadlock during epoch transition
+        for i, data_batch in enumerate(self.data_loader):
+            self._inner_iter = i
+            self.call_hook('before_train_iter')
+            self.run_iter(data_batch, train_mode=True, **kwargs)
+            self.call_hook('after_train_iter')
+            self._iter += 1
 
-        # prepare input args for train_step
-        # running status
-        if self.pass_training_status:
-            running_status = dict(iteration=self.iter, epoch=self.epoch)
-            kwargs['running_status'] = running_status
-        # ddp reducer for tracking dynamic computational graph
-        if self.is_dynamic_ddp:
-            kwargs.update(dict(ddp_reducer=self.model.reducer))
+        self.call_hook('after_train_epoch')
+        self._epoch += 1
 
-        if self.with_fp16_grad_scaler:
-            kwargs.update(dict(loss_scaler=self.loss_scaler))
-
-        if self.use_apex_amp:
-            kwargs.update(dict(use_apex_amp=True))
-
-        outputs = self.model.train_step(data_batch, self.optimizer, **kwargs)
-
-        # the loss scaler should be updated after ``train_step``
-        if self.with_fp16_grad_scaler:
-            self.loss_scaler.update()
-
-        # further check for the cases where the optimizer is built in
-        # `train_step`.
-        if self.optimizer is None:
-            if hasattr(_model, 'optimizer'):
-                self.optimizer_from_model = True
-                self.optimizer = _model.optimizer
-
-        # check if self.optimizer from model and track it
-        if self.optimizer_from_model:
-            self.optimizer = _model.optimizer
+    def run_iter(self, data_batch, train_mode, **kwargs):
+        if self.batch_processor is not None:
+            outputs = self.batch_processor(
+                self.model, data_batch, train_mode=train_mode, **kwargs)
+        elif train_mode:
+            outputs = self.model.train_step(data_batch, self.optimizer,
+                                            **kwargs)
+        else:
+            outputs = self.model.val_step(data_batch, self.optimizer, **kwargs)
         if not isinstance(outputs, dict):
-            raise TypeError('model.train_step() must return a dict')
+            raise TypeError('"batch_processor()" or "model.train_step()"'
+                            'and "model.val_step()" must return a dict')
         if 'log_vars' in outputs:
             self.log_buffer.update(outputs['log_vars'], outputs['num_samples'])
         self.outputs = outputs
-        self.call_hook('after_train_iter')
-        self._inner_iter += 1
-        self._iter += 1
 
-    def run(self, data_loaders, workflow, max_iters=None, **kwargs):
+    def run(self, data_loaders, workflow, max_epochs=None, **kwargs):
         """Start running.
 
         Args:
@@ -251,41 +228,44 @@ class DynamicEpochBasedRunner(IterEpochRunner):
         assert isinstance(data_loaders, list)
         assert mmcv.is_list_of(workflow, tuple)
         assert len(data_loaders) == len(workflow)
-        if max_iters is not None:
+        if max_epochs is not None:
             warnings.warn(
-                'setting max_iters in run is deprecated, '
-                'please set max_iters in runner_config', DeprecationWarning)
-            self._max_iters = max_iters
-        assert self._max_iters is not None, (
-            'max_iters must be specified during instantiation')
+                'setting max_epochs in run is deprecated, '
+                'please set max_epochs in runner_config', DeprecationWarning)
+            self._max_epochs = max_epochs
+
+        assert self._max_epochs is not None, (
+            'max_epochs must be specified during instantiation')
 
         work_dir = self.work_dir if self.work_dir is not None else 'NONE'
         self.logger.info('Start running, host: %s, work_dir: %s',
                          get_host_info(), work_dir)
-        self.logger.info('workflow: %s, max: %d iters', workflow,
-                         self._max_iters)
+        self.logger.info('Hooks will be executed in the following order:\n%s',
+                         self.get_hook_info())
+        self.logger.info('workflow: %s, max: %d epochs', workflow,
+                         self._max_epochs)
         self.call_hook('before_run')
 
-        iter_loaders = [IterLoader(x, self) for x in data_loaders]
-
-        self.call_hook('before_epoch')
-
-        while self.iter < self._max_iters:
+        while self.epoch < self._max_epochs:
             for i, flow in enumerate(workflow):
-                self._inner_iter = 0
-                mode, iters = flow
-                if not isinstance(mode, str) or not hasattr(self, mode):
-                    raise ValueError(
-                        'runner has no method named "{}" to run a workflow'.
-                        format(mode))
-                iter_runner = getattr(self, mode)
-                for _ in range(iters):
-                    if mode == 'train' and self.iter >= self._max_iters:
+                mode, epochs = flow
+                if isinstance(mode, str):  # self.train()
+                    if not hasattr(self, mode):
+                        raise ValueError(
+                            f'runner has no method named "{mode}" to run an '
+                            'epoch')
+                    epoch_runner = getattr(self, mode)
+                else:
+                    raise TypeError(
+                        'mode in workflow must be a str, but got {}'.format(
+                            type(mode)))
+
+                for _ in range(epochs):
+                    if mode == 'train' and self.epoch >= self._max_epochs:
                         break
-                    iter_runner(iter_loaders[i], **kwargs)
+                    epoch_runner(data_loaders[i], **kwargs)
 
         time.sleep(1)  # wait for some hooks like loggers to finish
-        self.call_hook('after_epoch')
         self.call_hook('after_run')
 
     def resume(self,
@@ -405,6 +385,7 @@ class DynamicEpochBasedRunner(IterEpochRunner):
                 
                 hook_type = policy_type + 'LrUpdaterHook'
                 lr_config_['type'] = hook_type
+                lr_config_['apply_model'] = key
                 hook = mmcv.build_from_cfg(lr_config_, HOOKS)
                 self.register_hook(hook, priority='VERY_HIGH')
         

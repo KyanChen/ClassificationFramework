@@ -14,7 +14,7 @@ import sys
 from mmcls import __version__
 from mmcls.apis import init_random_seed, set_random_seed, train_model
 from mmcls.datasets import build_dataset
-from mmcls.models import build_classifier
+from mmcls.models import build_representor
 from mmcls.utils import collect_env, get_root_logger, setup_multi_processes
 from mmcv import Config, DictAction
 from mmcv.runner import get_dist_info, init_dist
@@ -28,6 +28,7 @@ def parse_args():
         '--resume-from', help='the checkpoint file to resume from')
     parser.add_argument(
         '--no-validate',
+        default=True,
         action='store_true',
         help='whether not to evaluate the checkpoint during training')
     group_gpus = parser.add_mutually_exclusive_group()
@@ -157,7 +158,7 @@ def main():
     cfg.seed = seed
     meta['seed'] = seed
 
-    model = build_classifier(cfg.model)
+    model = build_representor(cfg.model)
     model.init_weights()
 
     datasets = [build_dataset(cfg.data.train)]
@@ -171,8 +172,7 @@ def main():
     meta.update(
         dict(
             mmcls_version=__version__,
-            config=cfg.pretty_text,
-            CLASSES=datasets[0].CLASSES))
+            config=cfg.pretty_text))
 
     # add an attribute for visualization convenience
     train_model(

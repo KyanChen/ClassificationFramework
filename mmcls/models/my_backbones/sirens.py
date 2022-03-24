@@ -1,5 +1,5 @@
 # from ..builder import BACKBONES
-from typing import OrderedDict
+from collections import OrderedDict
 import warnings
 import torch
 import torch.nn as nn
@@ -32,7 +32,6 @@ class SirenLayer(BaseModule):
             self.activation_func = nn.Identity()
         else:
             self.activation_func = build_activation_layer(act_cfg)
-        
 
         _in_channels = in_channels
         _out_channels = out_channels
@@ -45,8 +44,7 @@ class SirenLayer(BaseModule):
                 f'layer_{i}_actfunc'
                 ])
             _in_channels = _out_channels
-            
-    
+
     def init_weights(self):
         super(SirenLayer, self).init_weights()
     
@@ -116,8 +114,7 @@ class Siren(BaseBackbone):
         self.modulation_size_dict = self.get_bias_size()
         _out_channels = sum(self.modulation_size_dict.values())
         self.shift_modulation_layer = nn.Linear(num_modulation, _out_channels, bias=bias)
-        
-    
+
     def get_bias_size(self):
         parameters_size = OrderedDict()
         for name, parm in self.named_parameters():

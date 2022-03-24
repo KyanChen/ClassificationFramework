@@ -12,10 +12,11 @@ dist_params = dict(backend='nccl')
 log_level = 'INFO'
 workflow = [('train', 1)]
 
-n_batch=2
+n_batch = 2
 
 model = dict(
     type='ImageRepresentor',
+    img_size=(256, 256),
     backbone=dict(
         type='Siren',
         num_layers=3,
@@ -28,6 +29,7 @@ model = dict(
         init_cfg=None
         ),
     modulations=dict(
+        type='Modulations',
         n_dims=256,
         n_batch=n_batch
     )
@@ -52,6 +54,7 @@ test_pipeline = [
 ]
 
 data_prefix = 'data/UC/UCMerced_LandUse/Images'
+data_prefix = r'H:\DataSet\SceneCls\UCMerced_LandUse\UCMerced_LandUse\Images'.replace('\\', '/')
 
 data = dict(
     samples_per_gpu=n_batch,
@@ -65,14 +68,12 @@ data = dict(
         type=dataset_type,
         data_prefix=data_prefix,
         ann_file=data_prefix+'/../val_list.txt',
-        classes=data_prefix+'/../class_names.txt',
         pipeline=test_pipeline),
     test=dict(
         # replace `data/val` with `data/test` for standard test
         type=dataset_type,
         data_prefix=data_prefix,
         ann_file=data_prefix+'/../val_list.txt',
-        classes=data_prefix+'/../class_names.txt',
         pipeline=test_pipeline))
 
 
@@ -83,16 +84,16 @@ optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # optimizer_inner = dict(type='AdamW', lr=1e-3, weight_decay=1e-3)
 # optimizer_outer = dict(type='AdamW', lr=1e-3, weight_decay=1e-3)
 optimizer = dict(
-    modulations=dict(type='Adam', lr=0.0002, betas=(0.5, 0.999)),
-    siren=dict(type='Adam', lr=0.0002, betas=(0.5, 0.999)))
+    modulations=dict(type='Adam', lr=0.005, betas=(0.5, 0.999)),
+    siren=dict(type='Adam', lr=0.001, betas=(0.5, 0.999)))
 
 # optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
 
 lr_config = dict(
-    modulations=dict(policy='Poly', power=0.9, min_lr=1e-7, by_epoch=True,
-        warmup='linear', warmup_iters=5, warmup_ratio=0.1, warmup_by_epoch=True),
-    siren=dict(policy='Poly', power=0.9, min_lr=1e-7, by_epoch=True,
-        warmup='linear', warmup_iters=5, warmup_ratio=0.1, warmup_by_epoch=True),
+    modulations=dict(policy='InnerPoly', loop_num=10, power=0.9, min_lr=1e-7, by_epoch=True
+                     ),
+    siren=dict(policy='OuterPoly', power=0.9, min_lr=1e-7, by_epoch=True,
+               warmup='linear', warmup_iters=5, warmup_ratio=0.1, warmup_by_epoch=True),
     )
 
 # # optimizer
