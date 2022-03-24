@@ -60,7 +60,7 @@ class SirenLayer(BaseModule):
 @BACKBONES.register_module()
 class Siren(BaseBackbone):
     def __init__(self,
-                 num_layers,
+                 inner_layers,
                  in_channels=2,
                  out_channels=3,
                  base_channels=28,
@@ -72,12 +72,12 @@ class Siren(BaseBackbone):
         
         super(Siren, self).__init__(init_cfg)
         if len(expansions) == 1:
-            self.expansions = expansions * num_layers
-        assert num_layers == len(self.expansions)
+            self.expansions = expansions * inner_layers
+        assert inner_layers == len(self.expansions)
         if isinstance(self.expansions, list):
             self.expansions = torch.tensor(self.expansions)
 
-        self.num_layers = num_layers
+        self.inner_layers = inner_layers
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.base_channels = base_channels
@@ -86,7 +86,8 @@ class Siren(BaseBackbone):
         self.layers = []
         _in_channels = in_channels
         out_channels_list = base_channels * self.expansions
-        for i in range(self.num_layers):
+        out_channels_list = torch.cat((out_channels_list, torch.tensor([self.out_channels])))
+        for i in range(self.inner_layers+1):
             _out_channels = out_channels_list[i]
 
             w0 = 30.
@@ -96,7 +97,7 @@ class Siren(BaseBackbone):
                 c = 6.
                 w_std = torch.sqrt(c / _in_channels) / w0
             init_cfg = dict(type='Uniform', a=-w_std, b=w_std)
-            if i == self.num_layers-1:
+            if i == self.inner_layers:
                 act_cfg = dict(type='Sigmoid')
             else:
                 act_cfg = dict(type='Sine', w0=w0)
@@ -152,4 +153,6 @@ class Siren(BaseBackbone):
 
     def train(self, mode=True):
         super(Siren, self).train(mode)
+        for param in self.parameters():
+            param.requires_grad = True
 

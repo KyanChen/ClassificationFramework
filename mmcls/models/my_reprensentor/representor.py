@@ -7,6 +7,10 @@ from ..utils.augment import Augments
 from ..classifiers.base import BaseClassifier
 from mmcv.runner import BaseModule, auto_fp16
 from einops import rearrange, repeat
+from collections import OrderedDict
+import torch.distributed as dist
+from mmcls.models.losses import PSNR
+
 
 
 @REPRESENTORS.register_module()
@@ -17,7 +21,9 @@ class ImageRepresentor(BaseClassifier):
                  modulations,
                  pretrained=None,
                  img_size=None,
-                 max_sample_per_img=0.1,
+                 max_sample_per_img=0.3,
+                 max_inner_iter=10,
+                 cal_acc=True,
                  loss=dict(type='SmoothL1Loss', loss_weight=1.0),
                  train_cfg=None,
                  init_cfg=None):
@@ -33,7 +39,11 @@ class ImageRepresentor(BaseClassifier):
         if isinstance(max_sample_per_img, float):
             max_sample_per_img = int(h*w*max_sample_per_img)
         self.max_sample_per_img = max_sample_per_img
+        self.max_inner_iter = max_inner_iter
         self.compute_loss = build_loss(loss)
+        self.compute_accuracy = PSNR()
+        self.cal_acc = cal_acc
+        self.init_weights()
 
     def get_grid(self, h, w, is_normalize=True):
         j = torch.linspace(0.0, h - 1.0, h)
@@ -45,21 +55,9 @@ class ImageRepresentor(BaseClassifier):
         grid = torch.stack([i_grid, j_grid])
         return grid
 
-    def extract_feat(self, img, stage='backbone'):
-        x = self.backbone(img)
+    def extract_feat(self, imgs, stage=None):
+        pass
 
-        if stage == 'backbone':
-            return x
-
-        if self.with_neck:
-            x = self.neck(x)
-        if stage == 'neck':
-            return x
-
-        if self.with_head and hasattr(self.head, 'pre_logits'):
-            x = self.head.pre_logits(x)
-        return x
-    
     # @auto_fp16(apply_to=('img', ))
     def forward(self, img, return_loss=True, **kwargs):
         if return_loss:
@@ -69,36 +67,57 @@ class ImageRepresentor(BaseClassifier):
 
     def forward_train(self, img, **kwargs):
         B, C, H, W = img.size()
+
         gt_labels = img
-        img = repeat(self.grid, 'c h w -> B c h w', B=B)
-        samples_per_img = H*W
-        gt_labels = rearrange(gt_labels, 'b c h w -> (b h w) c')  # n_batch, n_sample, 3
-        imgs = rearrange(img, 'b c h w -> (b h w) c')  # n_batch, n_sample, 2
+        gt_label_samples = rearrange(gt_labels, 'b c h w -> (b h w) c')  # n_batch, n_sample, 3
+        imgs = repeat(self.grid, 'c h w -> B c h w', B=B)
+        samples_per_img = H * W
+        img_samples = rearrange(imgs, 'b c h w -> (b h w) c')  # n_batch, n_sample, 2
 
-        # sample
-        sample_inds = [torch.randint(0, samples_per_img, size=[self.max_sample_per_img])+idx*samples_per_img for idx in range(B)]
-        imgs = imgs[sample_inds]
-        gt_labels = gt_labels[sample_inds]
-        modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims', n_samples=self.max_sample_per_img)
+        runner = kwargs['runner']
+        # 冻结siren参数
+        self.modulations.train(True)
+        self.siren._freeze_model()
+        # modulations 置零
+        self.modulations._set_zeros()
 
-        x = self.siren(imgs, modulations)
+        for i_iter in range(self.max_inner_iter):
+            for hook in runner.hooks:
+                if hasattr(hook, 'before_train_inner_iter'):
+                    getattr(hook, 'before_train_inner_iter')(runner, i_iter)
+
+            # sample
+            sample_inds = [torch.randint(0, samples_per_img, size=[self.max_sample_per_img]) + idx * samples_per_img for
+                           idx in range(B)]
+            sample_inds = torch.cat(sample_inds)
+            inputs = img_samples[sample_inds]
+            targets = gt_label_samples[sample_inds]
+            modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims',
+                                 n_samples=self.max_sample_per_img)
+            x = self.siren(inputs, modulations)
+            num_samples = len(x)
+            loss = self.compute_loss(x, targets, avg_factor=num_samples)
+            # 求梯度
+            for hook in runner.hooks:
+                if hasattr(hook, 'after_train_inner_iter'):
+                    getattr(hook, 'after_train_inner_iter')(runner, 'modulations', loss)
+
+        self.modulations._freeze_model()
+        self.siren.train(True)
+
+        inputs = img_samples
+        targets = gt_label_samples
+        modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims',
+                             n_samples=samples_per_img)
+        x = self.siren(inputs, modulations)
+        num_samples = len(x)
+        loss = self.compute_loss(x, targets, avg_factor=num_samples)
 
         losses = dict()
-
-        num_samples = len(x)
-        loss = self.compute_loss(x, gt_labels, avg_factor=num_samples)
-        if self.cal_acc:
-            # compute accuracy
-            acc = self.compute_accuracy(cls_score, gt_label)
-            assert len(acc) == len(self.topk)
-            losses['accuracy'] = {
-                f'top-{k}': a
-                for k, a in zip(self.topk, acc)
-            }
         losses['loss'] = loss
-        return losses
-
-        losses.update(loss)
+        if self.cal_acc:
+            acc = self.compute_accuracy(x, targets)
+            losses['psnr'] = acc
 
         return losses
 
@@ -141,8 +160,8 @@ class ImageRepresentor(BaseClassifier):
 
         return loss, log_vars
 
-    def train_step(self, data, optimizer=None, **kwargs):
-        losses = self(**data)
+    def train_step(self, data, **kwargs):
+        losses = self(**data, **kwargs)
         loss, log_vars = self._parse_losses(losses)
 
         outputs = dict(
@@ -150,7 +169,7 @@ class ImageRepresentor(BaseClassifier):
 
         return outputs
 
-    def val_step(self, data, optimizer=None, **kwargs):
+    def val_step(self, data, **kwargs):
         losses = self(**data)
         loss, log_vars = self._parse_losses(losses)
 

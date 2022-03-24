@@ -10,10 +10,11 @@ from .utils import (convert_to_one_hot, reduce_loss, weight_reduce_loss,
                     weighted_loss)
 from .smooth_l1_loss import SmoothL1Loss
 from .mse_loss import MSELoss
+from .img_metric import PSNR
 
 __all__ = [
     'accuracy', 'Accuracy', 'asymmetric_loss', 'AsymmetricLoss',
     'cross_entropy', 'binary_cross_entropy', 'CrossEntropyLoss', 'reduce_loss',
     'weight_reduce_loss', 'LabelSmoothLoss', 'weighted_loss', 'FocalLoss',
-    'sigmoid_focal_loss', 'convert_to_one_hot', 'SeesawLoss'
+    'sigmoid_focal_loss', 'convert_to_one_hot', 'SeesawLoss', 'PSNR'
 ]

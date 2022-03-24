@@ -8,9 +8,9 @@ from mmcv.runner import BaseModule, auto_fp16
 import torch
 from torch import nn as nn
 
+
 @PARAMETERS.register_module()
 class Modulations(BaseModule):
-
     def __init__(self,
                  n_dims,
                  n_batch,
@@ -31,3 +31,11 @@ class Modulations(BaseModule):
         self.eval()
         for param in self.parameters():
             param.requires_grad = False
+
+    def _set_zeros(self):
+        self.modulations.data = torch.zeros_like(self.modulations)
+
+    def train(self, mode: bool = True):
+        super(Modulations, self).train(mode)
+        for param in self.parameters():
+            param.requires_grad = True

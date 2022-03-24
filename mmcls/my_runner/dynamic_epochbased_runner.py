@@ -116,23 +116,6 @@ class IterLoader:
 
 @RUNNERS.register_module()
 class DynamicEpochBasedRunner(EpochBasedRunner):
-    """Dynamic Iterbased Runner.
-
-    In this Dynamic Iterbased Runner, we will pass the ``reducer`` to the
-    ``train_step`` so that the models can be trained with dynamic architecture.
-    More details and clarification can be found in this [tutorial](docs/en/tutorials/ddp_train_gans.md).  # noqa
-
-    Args:
-        is_dynamic_ddp (bool, optional): Whether to adopt the dynamic ddp.
-            Defaults to False.
-        pass_training_status (bool, optional): Whether to pass the training
-            status. Defaults to False.
-        fp16_loss_scaler (dict | None, optional): Config for fp16 GradScaler
-            from ``torch.cuda.amp``. Defaults to None.
-        use_apex_amp (bool, optional): Whether to use apex.amp to start mixed
-            precision training. Defaults to False.
-    """
-
     def __init__(self,
                  *args,
                  is_dynamic_ddp=False,
@@ -168,6 +151,7 @@ class DynamicEpochBasedRunner(EpochBasedRunner):
 
         # flag to use amp in apex (NVIDIA)
         self.use_apex_amp = use_apex_amp
+        self.outputs = dict()
 
     def call_hook(self, fn_name):
         """Call all hooks.
@@ -179,7 +163,6 @@ class DynamicEpochBasedRunner(EpochBasedRunner):
         for hook in self._hooks:
             if hasattr(hook, fn_name):
                 getattr(hook, fn_name)(self)
-
 
     def train(self, data_loader, **kwargs):
         self.model.train()
@@ -203,10 +186,9 @@ class DynamicEpochBasedRunner(EpochBasedRunner):
             outputs = self.batch_processor(
                 self.model, data_batch, train_mode=train_mode, **kwargs)
         elif train_mode:
-            outputs = self.model.train_step(data_batch, self.optimizer,
-                                            **kwargs)
+            outputs = self.model.train_step(data_batch, runner=self, **kwargs)
         else:
-            outputs = self.model.val_step(data_batch, self.optimizer, **kwargs)
+            outputs = self.model.val_step(data_batch, runner=self, **kwargs)
         if not isinstance(outputs, dict):
             raise TypeError('"batch_processor()" or "model.train_step()"'
                             'and "model.val_step()" must return a dict')
