@@ -180,6 +180,15 @@ class DynamicEpochBasedRunner(EpochBasedRunner):
 
         self.call_hook('after_train_epoch')
         self._epoch += 1
+    
+
+    def val(self, data_loader, **kwargs):
+        self.mode = 'val'
+        self.data_loader = data_loader
+        time.sleep(2)  # Prevent possible deadlock during epoch transition
+        for i, data_batch in enumerate(self.data_loader):
+            self._inner_iter = i
+            self.run_iter(data_batch, train_mode=False)
 
     def run_iter(self, data_batch, train_mode, **kwargs):
         if self.batch_processor is not None:

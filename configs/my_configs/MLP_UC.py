@@ -103,6 +103,6 @@ lr_config = dict(
 
 
 runner = dict(type='DynamicEpochBasedRunner', max_epochs=500)
-evaluation = dict(interval=1, metric='accuracy')
+evaluation = dict(interval=10, metric='accuracy')
 load_from = None
 resume_from = None

@@ -123,18 +123,68 @@ class ImageRepresentor(BaseClassifier):
             losses['psnr'] = acc
 
         return losses
+    
+    def forward_val(self, img, **kwargs):
+        B, C, H, W = img.size()
+        self.grid = self.grid.to(img.device)
+        gt_labels = img
+        samples_per_img = H * W
+        gt_label_samples = rearrange(gt_labels, 'b c h w -> (b h w) c')  # n_batch, n_sample, 3
+        imgs = repeat(self.grid, 'c h w -> B c h w', B=B)
 
+        img_samples = rearrange(imgs, 'b c h w -> (b h w) c')  # n_batch, n_sample, 2
+
+        runner = kwargs['runner']
+        # 冻结siren参数
+        self.modulations.train(True)
+        self.siren._freeze_model()
+        # modulations 置零
+        self.modulations._set_zeros()
+
+        for i_iter in range(self.max_inner_iter):
+            for hook in runner.hooks:
+                if hasattr(hook, 'before_train_inner_iter'):
+                    getattr(hook, 'before_train_inner_iter')(runner, i_iter)
+
+            inputs = img_samples
+            targets = gt_label_samples
+            modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims', n_samples=samples_per_img)
+            x = self.siren(inputs, modulations)
+            num_samples = len(x)
+            loss = self.compute_loss(x, targets, avg_factor=num_samples)
+            # 求梯度
+            for hook in runner.hooks:
+                if hasattr(hook, 'after_train_inner_iter'):
+                    getattr(hook, 'after_train_inner_iter')(runner, 'modulations', loss)
+
+        self.modulations._freeze_model()
+        
+
+        inputs = img_samples
+        targets = gt_label_samples
+        modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims',
+                            n_samples=samples_per_img)
+        x = self.siren(inputs, modulations)
+        num_samples = len(x)
+        loss = self.compute_loss(x, targets, avg_factor=num_samples)
+        pred_img = rearrange(x, '(b h w)c -> b c h w', b=B, h=H, w=W)
+        for hook in runner.hooks:
+                if hasattr(hook, 'vis_batch_img'):
+                    getattr(hook, 'vis_batch_img')(runner, pred_img, gt_labels)
+        
+
+        img_samples = rearrange(imgs, 'b c h w -> (b h w) c')  # n_batch, n_sample, 2
+
+        losses = dict()
+        losses['loss'] = loss
+        if self.cal_acc:
+            acc = self.compute_accuracy(x, targets)
+            losses['psnr'] = acc
+        
+
+    
     def simple_test(self, img, img_metas=None, **kwargs):
-        """Test without augmentation."""
-        x = self.extract_feat(img)
-
-        if isinstance(self.head, MultiLabelClsHead):
-            assert 'softmax' not in kwargs, (
-                'Please use `sigmoid` instead of `softmax` '
-                'in multi-label tasks.')
-        res = self.head.simple_test(x, **kwargs)
-
-        return res
+        pass
 
     def _parse_losses(self, losses):
         log_vars = OrderedDict()
@@ -173,7 +223,7 @@ class ImageRepresentor(BaseClassifier):
         return outputs
 
     def val_step(self, data, **kwargs):
-        losses = self(**data)
+        losses = self.forward_val(**data, **kwargs)
         loss, log_vars = self._parse_losses(losses)
 
         outputs = dict(
