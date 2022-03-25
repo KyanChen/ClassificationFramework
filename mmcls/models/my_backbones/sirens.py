@@ -96,7 +96,7 @@ class Siren(BaseBackbone):
             else:
                 c = 6.
                 w_std = torch.sqrt(c / _in_channels) / w0
-            init_cfg = dict(type='Uniform', a=-w_std, b=w_std)
+            init_cfg = dict(type='Uniform', layer='Linear', a=-w_std, b=w_std)
             if i == self.inner_layers:
                 act_cfg = dict(type='Sigmoid')
             else:

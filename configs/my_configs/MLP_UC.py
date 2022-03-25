@@ -10,10 +10,11 @@ log_config = dict(
 
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-workflow = [('train', 1)]
+workflow = [ ('val', 1)]
+custom_hooks = [dict(type='VisImg', dir='result')]
 
-n_batch = 4
-inner_loop_num = 100
+n_batch = 1
+inner_loop_num = 5000
 
 model = dict(
     type='ImageRepresentor',
@@ -45,7 +46,7 @@ dataset_type = 'RepFolderDataset'
 train_pipeline = [
     dict(type='LoadImageFromFile', rearrange=True),
     dict(type='Resize', size=(256, 256)),
-    dict(type='RandomFlip', flip_prob=0.5, directions=['horizontal', 'vertical']),
+    # dict(type='RandomFlip', flip_prob=0.5, directions=['horizontal', 'vertical']),
     dict(type='ImageToTensor', keys=['img']),
     dict(type='Collect', keys=['img'])
 ]
@@ -81,7 +82,7 @@ data = dict(
         pipeline=test_pipeline))
 
 
-optimizer_config = dict(type='MyOptimizerHook', grad_clip=dict(max_norm=1000, norm_type=2))
+optimizer_config = dict(type='MyOptimizerHook', grad_clip=None)
 
 # DETR: backbone:1e-5; lr:1e-4; weight_decay:1e-4; betas=(0.9, 0.95)
 # Adam L2正则化的最佳学习率是1e-6（最大学习率为1e-3），而0.3是weight decay的最佳值（学习率为3e-3）
@@ -102,7 +103,7 @@ lr_config = dict(
     )
 
 
-runner = dict(type='DynamicEpochBasedRunner', max_epochs=500)
+runner = dict(type='DynamicEpochBasedRunner', max_epochs=5000)
 evaluation = dict(interval=10, metric='accuracy')
 load_from = None
 resume_from = None

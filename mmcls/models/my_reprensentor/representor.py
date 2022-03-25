@@ -43,6 +43,7 @@ class ImageRepresentor(BaseClassifier):
         self.compute_loss = build_loss(loss)
         self.compute_accuracy = PSNR()
         self.cal_acc = cal_acc
+        self.optimizr = torch.optim.Adam(self.siren.parameters(), lr=2e-4)
 
     def get_grid(self, h, w, is_normalize=True):
         j = torch.linspace(0.0, h - 1.0, h)
@@ -79,8 +80,8 @@ class ImageRepresentor(BaseClassifier):
 
         runner = kwargs['runner']
         # 冻结siren参数
-        self.modulations.train(True)
-        self.siren._freeze_model()
+        self.modulations._freeze_model()
+        # self.siren._freeze_model()
         # modulations 置零
         self.modulations._set_zeros()
 
@@ -105,7 +106,7 @@ class ImageRepresentor(BaseClassifier):
                 if hasattr(hook, 'after_train_inner_iter'):
                     getattr(hook, 'after_train_inner_iter')(runner, 'modulations', loss)
 
-        self.modulations._freeze_model()
+        # self.modulations._freeze_model()
         self.siren.train(True)
 
         inputs = img_samples
@@ -126,60 +127,73 @@ class ImageRepresentor(BaseClassifier):
     
     def forward_val(self, img, **kwargs):
         B, C, H, W = img.size()
+        img_metas = kwargs['img_metas']
         self.grid = self.grid.to(img.device)
         gt_labels = img
         samples_per_img = H * W
         gt_label_samples = rearrange(gt_labels, 'b c h w -> (b h w) c')  # n_batch, n_sample, 3
         imgs = repeat(self.grid, 'c h w -> B c h w', B=B)
-
         img_samples = rearrange(imgs, 'b c h w -> (b h w) c')  # n_batch, n_sample, 2
 
         runner = kwargs['runner']
         # 冻结siren参数
-        self.modulations.train(True)
-        self.siren._freeze_model()
-        # modulations 置零
+        self.modulations._freeze_model()
         self.modulations._set_zeros()
 
+        self.siren.train(True)
+        # modulations 置零
+        inputs = img_samples
+        targets = gt_label_samples
+        modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims',
+                             n_samples=samples_per_img)
+        best_acc = 0
         for i_iter in range(self.max_inner_iter):
+            is_vis = False
             for hook in runner.hooks:
                 if hasattr(hook, 'before_train_inner_iter'):
                     getattr(hook, 'before_train_inner_iter')(runner, i_iter)
 
-            inputs = img_samples
-            targets = gt_label_samples
-            modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims', n_samples=samples_per_img)
-            x = self.siren(inputs, modulations)
-            num_samples = len(x)
-            loss = self.compute_loss(x, targets, avg_factor=num_samples)
+            x = self.siren(inputs, modulations.data)
+            loss = self.compute_loss(x, targets)
+            self.optimizr.zero_grad()
+            loss.backward()
+            self.optimizr.step()
             # 求梯度
+            acc = self.compute_accuracy(x, targets)
+            if acc > best_acc:
+                is_vis = True
+                pred_img = rearrange(x, '(b h w) c -> b c h w', b=B, h=H, w=W)
+                print('best psnr: ', acc)
+
             for hook in runner.hooks:
-                if hasattr(hook, 'after_train_inner_iter'):
-                    getattr(hook, 'after_train_inner_iter')(runner, 'modulations', loss)
+                # if hasattr(hook, 'after_train_inner_iter'):
+                #     getattr(hook, 'after_train_inner_iter')(runner, 'siren', loss)
+                if is_vis:
+                    if hasattr(hook, 'vis_batch_img'):
+                        getattr(hook, 'vis_batch_img')(pred_img, gt_labels, img_metas, acc)
 
         self.modulations._freeze_model()
-        
 
         inputs = img_samples
         targets = gt_label_samples
         modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims',
-                            n_samples=samples_per_img)
+                             n_samples=samples_per_img)
         x = self.siren(inputs, modulations)
         num_samples = len(x)
         loss = self.compute_loss(x, targets, avg_factor=num_samples)
-        pred_img = rearrange(x, '(b h w)c -> b c h w', b=B, h=H, w=W)
-        for hook in runner.hooks:
-                if hasattr(hook, 'vis_batch_img'):
-                    getattr(hook, 'vis_batch_img')(runner, pred_img, gt_labels)
-        
-
-        img_samples = rearrange(imgs, 'b c h w -> (b h w) c')  # n_batch, n_sample, 2
-
         losses = dict()
         losses['loss'] = loss
         if self.cal_acc:
             acc = self.compute_accuracy(x, targets)
             losses['psnr'] = acc
+
+        pred_img = rearrange(x, '(b h w) c -> b c h w', b=B, h=H, w=W)
+        for hook in runner.hooks:
+            if hasattr(hook, 'vis_batch_img'):
+                getattr(hook, 'vis_batch_img')(pred_img, gt_labels, img_metas, losses['psnr'])
+
+
+        return losses
         
 
     
