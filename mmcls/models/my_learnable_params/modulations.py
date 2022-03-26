@@ -27,12 +27,12 @@ class Modulations(BaseModule):
     def forward(self):
         return self.modulations
     
-    def _freeze_model(self):
+    def freeze_model(self):
         self.eval()
         for param in self.parameters():
             param.requires_grad = False
 
-    def _set_zeros(self):
+    def set_zeros(self):
         self.modulations.data = torch.zeros_like(self.modulations)
 
     def train(self, mode: bool = True):

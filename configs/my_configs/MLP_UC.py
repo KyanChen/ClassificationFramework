@@ -1,7 +1,7 @@
-checkpoint_config = dict(interval=100)
+checkpoint_config = dict(interval=10)
 
 log_config = dict(
-    interval=1,
+    interval=5,
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
@@ -10,11 +10,11 @@ log_config = dict(
 
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-workflow = [ ('val', 1)]
+workflow = [('train', 20), ('val', 1)]
 custom_hooks = [dict(type='VisImg', dir='result')]
 
-n_batch = 1
-inner_loop_num = 5000
+n_batch = 12
+inner_loop_num = 64
 
 model = dict(
     type='ImageRepresentor',
@@ -24,18 +24,25 @@ model = dict(
     loss=dict(type='MSELoss', loss_weight=1.0),
     backbone=dict(
         type='Siren',
-        inner_layers=8,
+        inner_layers=9,
         in_channels=2,
         out_channels=3,
         base_channels=28,
-        num_modulation=256,
+        num_modulation=512,
         bias=True,
         expansions=[1],
         init_cfg=None
         ),
+    # pe=None,
+    pe=dict(
+        type='SineCosPE',
+        input_dim=2,
+        N_freqs=128,
+        max_freq=10,
+    ),
     modulations=dict(
         type='Modulations',
-        n_dims=256,
+        n_dims=512,
         n_batch=n_batch
     )
 )
@@ -81,29 +88,28 @@ data = dict(
         ann_file=data_prefix+'/../val_list.txt',
         pipeline=test_pipeline))
 
-
-optimizer_config = dict(type='MyOptimizerHook', grad_clip=None)
+# dict(max_norm=35, norm_type=2)
+optimizer_config = dict(type='MyOptimizerHook', grad_clip=dict(max_norm=100, norm_type=2))
 
 # DETR: backbone:1e-5; lr:1e-4; weight_decay:1e-4; betas=(0.9, 0.95)
 # Adam L2正则化的最佳学习率是1e-6（最大学习率为1e-3），而0.3是weight decay的最佳值（学习率为3e-3）
 # optimizer_inner = dict(type='AdamW', lr=1e-3, weight_decay=1e-3)
 # optimizer_outer = dict(type='AdamW', lr=1e-3, weight_decay=1e-3)
 optimizer = dict(
-    modulations=dict(type='AdamW', lr=1e-2, betas=(0.5, 0.999)),
-    siren=dict(type='AdamW', lr=1e-3, betas=(0.5, 0.999))
+    modulations=dict(type='AdamW', lr=5e-4, betas=(0.5, 0.95)),
+    siren=dict(type='AdamW', lr=1e-4, betas=(0.5, 0.95))
 )
 
 # optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
 
 lr_config = dict(
-    modulations=dict(policy='InnerPoly', inner_loop_num=inner_loop_num, power=0.9, min_lr=1e-5, by_epoch=True
-                     ),
+    modulations=dict(policy='InnerPoly', inner_loop_num=inner_loop_num, power=0.9, min_lr=1e-5, by_epoch=True),
     siren=dict(policy='OuterPoly', power=0.9, min_lr=1e-7, by_epoch=True,
                warmup='linear', warmup_iters=5, warmup_ratio=0.1, warmup_by_epoch=True),
     )
 
 
 runner = dict(type='DynamicEpochBasedRunner', max_epochs=5000)
-evaluation = dict(interval=10, metric='accuracy')
-load_from = None
+evaluation = dict(interval=10000, metric='accuracy')
+load_from = 'results/EXP20220321_0/latest.pth'
 resume_from = None

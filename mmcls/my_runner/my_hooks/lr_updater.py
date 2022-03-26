@@ -44,8 +44,6 @@ class InnerPolyLrUpdaterHook(PolyLrUpdaterHook):
         pass
 
 
-
-
 @HOOKS.register_module()
 class OuterPolyLrUpdaterHook(PolyLrUpdaterHook):
     def __init__(self, apply_model=None, **kwargs):

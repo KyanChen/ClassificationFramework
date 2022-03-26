@@ -1,7 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import torch
 
-from ..builder import REPRESENTORS, build_backbone, build_learnable_params, build_loss
+from ..builder import REPRESENTORS, build_backbone, build_learnable_params, build_loss, build_position_encoding
 from ..heads import MultiLabelClsHead
 from ..utils.augment import Augments
 from ..classifiers.base import BaseClassifier
@@ -12,13 +12,13 @@ import torch.distributed as dist
 from mmcls.models.losses import PSNR
 
 
-
 @REPRESENTORS.register_module()
 class ImageRepresentor(BaseClassifier):
 
     def __init__(self,
                  backbone,
                  modulations,
+                 pe,
                  pretrained=None,
                  img_size=None,
                  max_sample_per_img=0.3,
@@ -31,19 +31,29 @@ class ImageRepresentor(BaseClassifier):
 
         if pretrained is not None:
             self.init_cfg = dict(type='Pretrained', checkpoint=pretrained)
-        
+
+        self.pe = pe
+        if pe is not None:
+            self.pe = build_position_encoding(pe)
+            self.pe_out_dim = self.pe.out_dim
+            backbone['in_channels'] = self.pe_out_dim
+
         self.siren = build_backbone(backbone)
         self.modulations = build_learnable_params(modulations)
+
         w, h = img_size
         self.grid = self.get_grid(h, w)
+
         if isinstance(max_sample_per_img, float):
             max_sample_per_img = int(h*w*max_sample_per_img)
+
         self.max_sample_per_img = max_sample_per_img
         self.max_inner_iter = max_inner_iter
+
         self.compute_loss = build_loss(loss)
         self.compute_accuracy = PSNR()
+
         self.cal_acc = cal_acc
-        self.optimizr = torch.optim.Adam(self.siren.parameters(), lr=2e-4)
 
     def get_grid(self, h, w, is_normalize=True):
         j = torch.linspace(0.0, h - 1.0, h)
@@ -80,10 +90,10 @@ class ImageRepresentor(BaseClassifier):
 
         runner = kwargs['runner']
         # 冻结siren参数
-        self.modulations._freeze_model()
-        # self.siren._freeze_model()
+        self.siren.freeze_model()
         # modulations 置零
-        self.modulations._set_zeros()
+        self.modulations.train()
+        self.modulations.set_zeros()
 
         for i_iter in range(self.max_inner_iter):
             for hook in runner.hooks:
@@ -91,31 +101,36 @@ class ImageRepresentor(BaseClassifier):
                     getattr(hook, 'before_train_inner_iter')(runner, i_iter)
 
             # sample
-            sample_inds = [torch.randint(0, samples_per_img, size=[self.max_sample_per_img]) + idx * samples_per_img for
-                           idx in range(B)]
-            sample_inds = torch.cat(sample_inds)
-            inputs = img_samples[sample_inds]
-            targets = gt_label_samples[sample_inds]
-            modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims',
-                                 n_samples=self.max_sample_per_img)
-            x = self.siren(inputs, modulations)
-            num_samples = len(x)
-            loss = self.compute_loss(x, targets, avg_factor=num_samples)
+            # sample_inds = [torch.randint(0, samples_per_img, size=[self.max_sample_per_img]) + idx * samples_per_img for
+            #                idx in range(B)]
+            # sample_inds = torch.cat(sample_inds)
+            # x = img_samples[sample_inds]
+            # targets = gt_label_samples[sample_inds]
+            x = img_samples
+            targets = gt_label_samples
+            modulations = repeat(self.modulations.modulations[:B], 'b n_dims -> (b n_samples) n_dims',
+                                 n_samples=samples_per_img)
+            if self.pe:
+                x = self.pe(x)
+            x = self.siren(x, modulations)
+            loss = self.compute_loss(x, targets)
             # 求梯度
             for hook in runner.hooks:
                 if hasattr(hook, 'after_train_inner_iter'):
                     getattr(hook, 'after_train_inner_iter')(runner, 'modulations', loss)
 
-        # self.modulations._freeze_model()
+        self.modulations.freeze_model()
         self.siren.train(True)
 
-        inputs = img_samples
+        x = img_samples
         targets = gt_label_samples
-        modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims',
+        modulations = repeat(self.modulations.modulations[:B], 'b n_dims -> (b n_samples) n_dims',
                              n_samples=samples_per_img)
-        x = self.siren(inputs, modulations)
-        num_samples = len(x)
-        loss = self.compute_loss(x, targets, avg_factor=num_samples)
+        if self.pe:
+            x = self.pe(x)
+
+        x = self.siren(x, modulations)
+        loss = self.compute_loss(x, targets)
 
         losses = dict()
         losses['loss'] = loss
@@ -125,78 +140,76 @@ class ImageRepresentor(BaseClassifier):
 
         return losses
     
-    def forward_val(self, img, **kwargs):
+    def forward_val(self, img, img_metas, **kwargs):
         B, C, H, W = img.size()
-        img_metas = kwargs['img_metas']
         self.grid = self.grid.to(img.device)
+
         gt_labels = img
         samples_per_img = H * W
         gt_label_samples = rearrange(gt_labels, 'b c h w -> (b h w) c')  # n_batch, n_sample, 3
-        imgs = repeat(self.grid, 'c h w -> B c h w', B=B)
+
+        imgs = repeat(self.grid, 'c h w -> b c h w', b=B)
         img_samples = rearrange(imgs, 'b c h w -> (b h w) c')  # n_batch, n_sample, 2
 
         runner = kwargs['runner']
-        # 冻结siren参数
-        self.modulations._freeze_model()
-        self.modulations._set_zeros()
 
-        self.siren.train(True)
-        # modulations 置零
+        self.siren.freeze_model()
+        self.modulations.set_zeros()
+        self.modulations.train(True)
+
+        # self.siren.train()
+        # self.modulations.freeze_model()
+
         inputs = img_samples
         targets = gt_label_samples
-        modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims',
-                             n_samples=samples_per_img)
+
         best_acc = 0
+        best_modulations = self.modulations.modulations.data
+
+        modulations = repeat(self.modulations.modulations[:B], 'b n_dims -> (b n_samples) n_dims',
+                             n_samples=samples_per_img)
+
         for i_iter in range(self.max_inner_iter):
-            is_vis = False
             for hook in runner.hooks:
                 if hasattr(hook, 'before_train_inner_iter'):
                     getattr(hook, 'before_train_inner_iter')(runner, i_iter)
 
-            x = self.siren(inputs, modulations.data)
+            if self.pe:
+                x = self.pe(inputs)
+            else:
+                x = inputs
+            x = self.siren(x, modulations)
             loss = self.compute_loss(x, targets)
-            self.optimizr.zero_grad()
-            loss.backward()
-            self.optimizr.step()
-            # 求梯度
+            # self.optimize.zero_grad()
+            # loss.backward()
+            # self.optimize.step()
             acc = self.compute_accuracy(x, targets)
+            # print('psnr: ', acc)
             if acc > best_acc:
-                is_vis = True
-                pred_img = rearrange(x, '(b h w) c -> b c h w', b=B, h=H, w=W)
-                print('best psnr: ', acc)
-
+                best_acc = acc
+                best_modulations = self.modulations.modulations.data
             for hook in runner.hooks:
-                # if hasattr(hook, 'after_train_inner_iter'):
-                #     getattr(hook, 'after_train_inner_iter')(runner, 'siren', loss)
-                if is_vis:
-                    if hasattr(hook, 'vis_batch_img'):
-                        getattr(hook, 'vis_batch_img')(pred_img, gt_labels, img_metas, acc)
+                if hasattr(hook, 'after_train_inner_iter'):
+                    getattr(hook, 'after_train_inner_iter')(runner, 'modulations', loss)
 
-        self.modulations._freeze_model()
-
-        inputs = img_samples
-        targets = gt_label_samples
-        modulations = repeat(self.modulations.modulations, 'b n_dims -> (b n_samples) n_dims',
-                             n_samples=samples_per_img)
-        x = self.siren(inputs, modulations)
-        num_samples = len(x)
-        loss = self.compute_loss(x, targets, avg_factor=num_samples)
-        losses = dict()
-        losses['loss'] = loss
-        if self.cal_acc:
-            acc = self.compute_accuracy(x, targets)
-            losses['psnr'] = acc
-
+        self.modulations.freeze_model()
+        modulations = repeat(best_modulations[:B], 'b n_dims -> (b n_samples) n_dims', n_samples=samples_per_img)
+        if self.pe:
+            x = self.pe(inputs)
+        else:
+            x = inputs
+        x = self.siren(x, modulations)
         pred_img = rearrange(x, '(b h w) c -> b c h w', b=B, h=H, w=W)
         for hook in runner.hooks:
             if hasattr(hook, 'vis_batch_img'):
-                getattr(hook, 'vis_batch_img')(pred_img, gt_labels, img_metas, losses['psnr'])
+                getattr(hook, 'vis_batch_img')(pred_img, gt_labels, img_metas, best_acc)
 
-
+        loss = self.compute_loss(x, targets)
+        losses = dict()
+        losses['loss'] = loss.data
+        losses['psnr'] = best_acc
         return losses
-        
 
-    
     def simple_test(self, img, img_metas=None, **kwargs):
         pass
 

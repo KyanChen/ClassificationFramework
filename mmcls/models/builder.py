@@ -5,6 +5,7 @@ from mmcv.utils import Registry
 
 MODELS = Registry('models', parent=MMCV_MODELS)
 
+
 BACKBONES = MODELS
 NECKS = MODELS
 HEADS = MODELS
@@ -12,6 +13,7 @@ LOSSES = MODELS
 CLASSIFIERS = MODELS
 REPRESENTORS = MODELS
 PARAMETERS = MODELS
+PE = MODELS
 
 ATTENTION = Registry('attention', parent=MMCV_ATTENTION)
 
@@ -47,3 +49,6 @@ def build_representor(cfg):
 
 def build_learnable_params(cfg):
     return PARAMETERS.build(cfg)
+
+def build_position_encoding(cfg):
+    return PE.build(cfg)

@@ -22,7 +22,7 @@ class SirenLayer(BaseModule):
                  num_fcs=1,
                  bias=True,
                  act_cfg=dict(type='Sine', w0=30.),
-                 init_cfg=dict(type='Uniform', a=0, b=1),
+                 init_cfg=dict(type='Uniform', layer='Linear', a=-1, b=1),
                  **kwargs):
         super(SirenLayer, self).__init__(init_cfg=init_cfg)
         self.in_channels = in_channels
@@ -67,36 +67,35 @@ class Siren(BaseBackbone):
                  num_modulation=256,
                  bias=True,
                  expansions=[1],
-                 init_cfg=None,
+                 init_cfg=dict(type='Uniform', layer='Linear', a=-1/30, b=1/30),
                  ):
-        
         super(Siren, self).__init__(init_cfg)
         if len(expansions) == 1:
             self.expansions = expansions * inner_layers
         assert inner_layers == len(self.expansions)
-        if isinstance(self.expansions, list):
-            self.expansions = torch.tensor(self.expansions)
 
         self.inner_layers = inner_layers
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.base_channels = base_channels
         self.bias = bias
-        
+
         self.layers = []
-        _in_channels = in_channels
-        out_channels_list = base_channels * self.expansions
-        out_channels_list = torch.cat((out_channels_list, torch.tensor([self.out_channels])))
+        _in_channels = self.in_channels
+        out_channels_list = [x*base_channels for x in self.expansions]
+        out_channels_list += [self.out_channels]
+
         for i in range(self.inner_layers+1):
             _out_channels = out_channels_list[i]
 
             w0 = 30.
-            if i == 0:
+            if _in_channels == 2:
                 w_std = 1. / _in_channels
             else:
                 c = 6.
-                w_std = torch.sqrt(c / _in_channels) / w0
+                w_std = torch.sqrt(torch.tensor(c / _in_channels)) / w0
             init_cfg = dict(type='Uniform', layer='Linear', a=-w_std, b=w_std)
+
             if i == self.inner_layers:
                 act_cfg = dict(type='Sigmoid')
             else:
@@ -104,8 +103,7 @@ class Siren(BaseBackbone):
 
             layer = SirenLayer(
                 _in_channels, _out_channels, num_fcs=1,
-                bias=bias, act_cfg=act_cfg,
-                init_cfg=init_cfg
+                bias=bias, act_cfg=act_cfg, init_cfg=init_cfg
             )
             _in_channels = _out_channels
             layer_name = f'SirenLayer_{i}'
@@ -130,13 +128,26 @@ class Siren(BaseBackbone):
             parameters_size[name] = parm.size()
         return parameters_size
 
-    def _freeze_model(self):
+    def freeze_model(self):
         self.eval()
         for param in self.parameters():
             param.requires_grad = False
 
     def init_weights(self):
+        def weights_init(m):
+            classname = m.__class__.__name__
+            # if classname.find('Conv') != -1:
+            #     nn.init.normal_(m.weight.data, 0.0, 0.02)
+            # elif classname.find('BatchNorm') != -1:
+            #     nn.init.normal_(m.weight.data, 1.0, 0.02)
+            #     nn.init.constant_(m.bias.data, 0)
+            # elif classname.find('Linear') != -1:
+            if 'Linear' in classname:
+                nn.init.constant_(m.bias.data, 0)
         super(Siren, self).init_weights()
+        self.apply(weights_init)
+        tmp = torch.sqrt(torch.tensor(6. / 512)) / 30.
+        nn.init.normal_(self.shift_modulation_layer.weight.data, -tmp, tmp)
 
     def forward(self, x, modulations):
         shift_modulations = self.shift_modulation_layer(modulations)
