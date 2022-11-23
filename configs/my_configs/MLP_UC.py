@@ -1,7 +1,7 @@
 checkpoint_config = dict(interval=10)
 
 log_config = dict(
-    interval=5,
+    interval=1,
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
@@ -10,11 +10,11 @@ log_config = dict(
 
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-workflow = [('train', 20), ('val', 1)]
+workflow = [('train', 1)]
 custom_hooks = [dict(type='VisImg', dir='result')]
 
-n_batch = 12
-inner_loop_num = 64
+n_batch = 1
+inner_loop_num = 0
 
 model = dict(
     type='ImageRepresentor',

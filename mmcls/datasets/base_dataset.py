@@ -119,7 +119,8 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                  metric='accuracy',
                  metric_options=None,
                  indices=None,
-                 logger=None):
+                 logger=None,
+                 is_save_pred=True):
         """Evaluate the dataset.
 
         Args:
@@ -148,6 +149,22 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         eval_results = {}
         results = np.vstack(results)
         gt_labels = self.get_gt_labels()
+        pred = np.argmax(results, axis=1)
+
+        # tmp = [(pred[i].item(), gt_labels[i].item(), self.data_infos[i]['img_info']) for i in range(len(pred))]
+        # for i in tmp:
+        #     print(i)
+
+        if is_save_pred:
+            import sklearn.metrics as cal_metrics
+            confusion_matrix = cal_metrics.confusion_matrix(gt_labels.reshape(-1), pred.reshape(-1), labels=range(len(self.CLASSES)))
+            np.save('confusion_matrix', confusion_matrix)
+            target_names = self.CLASSES
+            m = cal_metrics.classification_report(gt_labels.reshape(-1), pred.reshape(-1),
+                                                  labels=range(len(self.CLASSES)), target_names=target_names, digits=4)
+            print()
+            print(m, flush=True)
+            print(confusion_matrix)
         if indices is not None:
             gt_labels = gt_labels[indices]
         num_imgs = len(results)

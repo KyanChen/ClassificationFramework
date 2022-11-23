@@ -1,5 +1,8 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import json
 import os
+import copy
+import pickle
 
 import numpy as np
 
@@ -64,7 +67,7 @@ def get_samples(root, folder_to_idx, extensions):
 
 
 @DATASETS.register_module()
-class ClsFolderDataset(BaseDataset):
+class ClsVec(BaseDataset):
     """`ImageNet <http://www.image-net.org>`_ Dataset.
 
     This implementation is modified from
@@ -80,7 +83,6 @@ class ClsFolderDataset(BaseDataset):
                  classes,
                  ann_file,
                  test_mode=False):
-        super(BaseDataset, self).__init__()
         self.ann_file = ann_file
         self.data_prefix = data_prefix
         self.test_mode = test_mode
@@ -113,7 +115,17 @@ class ClsFolderDataset(BaseDataset):
         data_infos = []
         for filename, gt_label in self.samples:
             info = {'img_prefix': self.data_prefix}
-            info['img_info'] = {'filename': filename+'.tif'}
+            info['img_info'] = {'filename': filename+'.tif'+'_84.pkl'}
             info['gt_label'] = np.array(self.class_to_idx[gt_label], dtype=np.int64)
             data_infos.append(info)
         return data_infos
+
+    def prepare_data(self, idx):
+        results = copy.deepcopy(self.data_infos[idx])
+        try:
+            with open(results['img_prefix']+'/'+results['img_info']['filename'], 'rb') as f:
+                results['img'] = pickle.load(f)['modulations']
+            results['img'] = np.array(results['img']).astype(np.float32).reshape(-1)
+        except:
+            print(results['img_info']['filename'])
+        return self.pipeline(results)

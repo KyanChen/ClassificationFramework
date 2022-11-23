@@ -36,7 +36,7 @@ class RepFolderDataset(Dataset):
             info['img_info'] = {'filename': filename}
             # info['gt_label'] = np.array(self.class_to_idx[gt_label], dtype=np.int64)
             data_infos.append(info)
-        return data_infos
+        return data_infos[:1]
     
     def prepare_data(self, idx):
         results = copy.deepcopy(self.data_infos[idx])

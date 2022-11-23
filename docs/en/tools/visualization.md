@@ -275,7 +275,7 @@ To exclude these extra tokens, we need know the number of extra tokens. Almost a
    ```shell
    python tools/visualizations/vis_cam.py \
        demo/bird.JPEG  \
-       configs/vision_transformer/vit-base-p16_ft-64xb64_in1k-384.py \
+       configs/vision_transformer/vit_s_GID.py \
        https://download.openmmlab.com/mmclassification/v0/vit/finetune/vit-base-p16_in21k-pre-3rdparty_ft-64xb64_in1k-384_20210928-98e8652b.pth \
        --vit-like \
        --target-layers 'backbone.layers[-1].ln1'

@@ -20,8 +20,8 @@ from mmcls.utils import get_root_logger, setup_multi_processes
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmcls test model')
-    parser.add_argument('config', help='test config file path')
-    parser.add_argument('checkpoint', help='checkpoint file')
+    parser.add_argument('--config', default='../configs/my_configs/resnet18_UC.py', help='test config file path')
+    parser.add_argument('--checkpoint', default='results/EXP20220411_0/epoch_150.pth', help='checkpoint file')
     parser.add_argument('--out', help='output result file')
     out_options = ['class_scores', 'pred_score', 'pred_label', 'pred_class']
     parser.add_argument(
@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument(
         '--metrics',
         type=str,
+        default=['accuracy'],
         nargs='+',
         help='evaluation metrics, which depends on the dataset, e.g., '
         '"accuracy", "precision", "recall", "f1_score", "support" for single '

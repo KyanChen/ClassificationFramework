@@ -1,6 +1,3 @@
-_base_ = [
-    'pipelines/auto_aug.py',
-]
 
 # dataset settings
 dataset_type = 'ImageNet'

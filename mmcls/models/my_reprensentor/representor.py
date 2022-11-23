@@ -92,8 +92,8 @@ class ImageRepresentor(BaseClassifier):
         # 冻结siren参数
         self.siren.freeze_model()
         # modulations 置零
-        self.modulations.train()
         self.modulations.set_zeros()
+        self.modulations.train()
 
         for i_iter in range(self.max_inner_iter):
             for hook in runner.hooks:
@@ -203,7 +203,9 @@ class ImageRepresentor(BaseClassifier):
         for hook in runner.hooks:
             if hasattr(hook, 'vis_batch_img'):
                 getattr(hook, 'vis_batch_img')(pred_img, gt_labels, img_metas, best_acc)
-
+        acc = self.compute_accuracy(x, targets)
+        best_acc = acc
+        print(acc)
         loss = self.compute_loss(x, targets)
         losses = dict()
         losses['loss'] = loss.data

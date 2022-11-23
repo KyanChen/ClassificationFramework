@@ -38,7 +38,7 @@ Models:
     Converted From:
       Weights: https://console.cloud.google.com/storage/browser/_details/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz
       Code: https://github.com/google-research/vision_transformer/blob/88a52f8892c80c10de99194990a517b4d80485fd/vit_jax/models.py#L208
-    Config: configs/vision_transformer/vit-base-p16_ft-64xb64_in1k-384.py
+    Config: configs/vision_transformer/vit_s_GID.py
   - Name: vit-base-p32_in21k-pre-3rdparty_ft-64xb64_in1k-384
     In Collection: Vision Transformer
     Metadata:

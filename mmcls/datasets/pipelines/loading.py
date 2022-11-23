@@ -52,7 +52,10 @@ class LoadImageFromFile(object):
         if self.to_float32:
             img = img.astype(np.float32)
         if self.rearrange:
-            img = img.astype(np.float32) / 255.
+            try:
+                img = img.astype(np.float32) / 255.
+            except:
+                print(filename)
         results['filename'] = filename
         results['ori_filename'] = results['img_info']['filename']
         results['img'] = img

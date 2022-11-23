@@ -10,7 +10,7 @@ from ..builder import build_position_encoding, PE
 class SineCosPE(BaseModule):
     """Position encoding with sine and cosine functions.
     """
-    def __init__(self, input_dim, N_freqs=128, max_freq=10, periodic_fns=[torch.sin, torch.cos],
+    def __init__(self, input_dim, N_freqs=10, max_freq=10-1, periodic_fns=[torch.sin, torch.cos],
                  log_sampling=True, include_input=True, trainable=False):
         super().__init__()
 
